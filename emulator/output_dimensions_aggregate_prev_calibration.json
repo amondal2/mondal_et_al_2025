@@ -1,0 +1,33 @@
+{
+  "PfPr": {
+    "begin_idx": 0,
+    "end_idx": 10,
+    "loss_multiplier": 10
+  },
+  "Incidence": {
+    "begin_idx": 10,
+    "end_idx": 32,
+    "loss_multiplier": 1
+  },
+  "Gametocytemia_1": {
+    "begin_idx": 32,
+    "end_idx": 248,
+    "n_density": 6,
+    "n_age": 3,
+    "loss_multiplier": 1
+  },
+  "Parasitemia_1": {
+    "begin_idx": 248,
+    "end_idx": 464,
+    "n_density": 6,
+    "n_age": 3,
+    "loss_multiplier": 1
+  },
+  "Parasitemia_2": {
+    "begin_idx": 464,
+    "end_idx": 884,
+    "n_density": 5,
+    "n_age": 7,
+    "loss_multiplier": 1
+  }
+}

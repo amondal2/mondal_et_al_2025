@@ -1,0 +1,11 @@
+,Falciparum_MSP_Variants,Falciparum_Nonspecific_Types,MSP1_Merozoite_Kill_Fraction,Max_Individual_Infections,Falciparum_PfEMP1_Variants,Antigen_Switch_Rate,Nonspecific_Antigenicity_Factor,joint_loss,joint_sim_loss
+1268,317.0,78.0,0.86,6.0,1036.0,2.9e-07,0.26,"tensor(0.2852, dtype=torch.float64)","tensor(0.2879, dtype=torch.float64)"
+803,201.0,62.0,0.95,9.0,6625.0,9.6e-06,0.55,"tensor(0.3026, dtype=torch.float64)","tensor(0.3285, dtype=torch.float64)"
+1794,448.0,368.0,0.014,10.0,1013.0,0.0015,0.52,"tensor(0.3049, dtype=torch.float64)","tensor(0.3177, dtype=torch.float64)"
+1811,452.0,179.0,0.89,7.0,2199.0,0.025,0.47,"tensor(0.3108, dtype=torch.float64)","tensor(0.3351, dtype=torch.float64)"
+75,19.0,337.0,0.83,9.0,1728.0,5e-06,9.6e-07,"tensor(0.3125, dtype=torch.float64)","tensor(0.3002, dtype=torch.float64)"
+1692,423.0,232.0,0.62,6.0,829.0,7.7e-08,0.51,"tensor(0.3150, dtype=torch.float64)","tensor(0.2956, dtype=torch.float64)"
+1977,494.0,19.0,0.79,8.0,3737.0,0.0012,0.32,"tensor(0.3187, dtype=torch.float64)","tensor(0.2769, dtype=torch.float64)"
+885,221.0,409.0,0.88,8.0,601.0,3e-06,0.34,"tensor(0.3240, dtype=torch.float64)","tensor(0.3129, dtype=torch.float64)"
+1126,281.0,325.0,0.96,11.0,1382.0,0.17,3.6e-06,"tensor(0.3247, dtype=torch.float64)","tensor(0.3945, dtype=torch.float64)"
+942,236.0,159.0,0.91,8.0,1399.0,0.6,0.00011,"tensor(0.3278, dtype=torch.float64)","tensor(0.3892, dtype=torch.float64)"
