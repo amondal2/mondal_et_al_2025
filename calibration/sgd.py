@@ -125,7 +125,7 @@ def calculate_loss_parasitemia_gametocytemia(
     return loss_fn(emulator_values, reference_values)
 
 
-def calculate_joint_loss(mlp, params, site_tokens, data_dict, min_values, max_values):
+def calculate_joint_loss(mlp, params, site_tokens, data_dict, min_values, max_values, log_params):
     loss_functions = {
         "namawala_1991": calculate_loss_prevalence,
         "ndiop_1993": calculate_loss_incidence,
@@ -138,12 +138,16 @@ def calculate_joint_loss(mlp, params, site_tokens, data_dict, min_values, max_va
     }
     site_losses = []
 
+
     for site in loss_functions.keys():
         outputs_for_site = site_metadata[site]["emulator_outcomes"]
         lf = loss_functions[site]
         token = site_tokens[site].iloc[0]
-        inputs = torch.cat((params, torch.tensor([token]))).unsqueeze(0)
-        inputs = normalize(inputs, min_values, max_values, num_features=7)
+        transformed_params = params.clone()
+        transformed_params[log_params] = torch.pow(10., params[log_params])
+        token_tensor = torch.tensor([token], dtype=params.dtype, device=params.device, requires_grad=True)
+        inputs = torch.cat((transformed_params, token_tensor)).unsqueeze(0)
+
         outputs = mlp(inputs)
         site_loss = lf(
             emulator_outputs=dict(
@@ -158,10 +162,15 @@ def calculate_joint_loss(mlp, params, site_tokens, data_dict, min_values, max_va
     return sum(site_losses)
 
 
-def project_to_positive(params, integer_params, min_values, max_values):
+def project_to_positive(params, integer_params, min_values, max_values, log_params):
     with torch.no_grad():
+        min_vals = min_values.squeeze(0).clone()
+        max_vals = max_values.squeeze(0).clone()
+
+        min_vals[log_params] = torch.log10(min_vals[log_params])
+        max_vals[log_params] = torch.log10(max_vals[log_params])
         params.data = torch.clamp(
-            params, min=min_values.squeeze(0), max=max_values.squeeze(0)
+            params, min=min_vals, max=max_vals
         )
         params.data[integer_params] = torch.round(params.data[integer_params])
 
@@ -193,12 +202,11 @@ def normalize(batch, min_values, max_values, num_features=7):
 
     return normalized_batch
 
-
 if __name__ == "__main__":
     _, data_dict = assemble_site_reference_data()
     device = "cpu"
     model_path, config_path = get_latest_emulator()
-    lrs = [0.5, 0.1, 0.01]
+    lrs = [0.1, 0.01]
     with open(os.path.expanduser(config_path)) as fp:
         config = json.load(fp)
 
@@ -248,13 +256,16 @@ if __name__ == "__main__":
         os.path.expanduser("~/EMOD-calibration/simulations/download/param_mins.csv"),
         index_col=0,
     )
-    min_values = torch.tensor(min_values.T.values, dtype=torch.float32, device=device)
+    min_values = torch.tensor(min_values.T.values, dtype=torch.float32, device=device).squeeze(0)
     max_values = pd.read_csv(
         os.path.expanduser("~/EMOD-calibration/simulations/download/param_max.csv"),
         index_col=0,
     )
-    max_values = torch.tensor(max_values.T.values, dtype=torch.float32, device=device)
+    max_values = torch.tensor(max_values.T.values, dtype=torch.float32, device=device).squeeze(0)
     integer_params = [0, 1, 3, 4]
+    log_params = 5
+    min_values[log_params] = torch.log10(min_values[log_params])
+    max_values[log_params] = torch.log10(max_values[log_params])
     key_path = manifest.parameters_key_path
     params_df = pd.read_csv(key_path)
 
@@ -275,7 +286,6 @@ if __name__ == "__main__":
         np.log10(min_val)
         if (
             parameter_name == "Antigen_Switch_Rate"
-            or parameter_name == "Nonspecific_Antigenicity_Factor"
         )
         else min_val
         for min_val, parameter_name in zip(
@@ -286,7 +296,6 @@ if __name__ == "__main__":
         np.log10(max_val)
         if (
             parameter_name == "Antigen_Switch_Rate"
-            or parameter_name == "Nonspecific_Antigenicity_Factor"
         )
         else max_val
         for max_val, parameter_name in zip(
@@ -295,13 +304,6 @@ if __name__ == "__main__":
     ]
     sample_scaled = qmc.scale(sample, lower_bounds, upper_bounds)
     sample_scaled = pd.DataFrame(sample_scaled, columns=params_df["parameter_name"])
-    sample_scaled["Antigen_Switch_Rate"] = np.power(
-        10, sample_scaled["Antigen_Switch_Rate"]
-    ).apply(lambda x: np.format_float_positional(x, precision=2, fractional=False))
-
-    sample_scaled["Nonspecific_Antigenicity_Factor"] = np.power(
-        10, sample_scaled["Nonspecific_Antigenicity_Factor"]
-    ).apply(lambda x: np.format_float_positional(x, precision=2, fractional=False))
 
     sample_scaled["MSP1_Merozoite_Kill_Fraction"] = sample_scaled[
         "MSP1_Merozoite_Kill_Fraction"
@@ -332,38 +334,41 @@ if __name__ == "__main__":
             optim_losses = []
 
             for i, param_set in enumerate(sample_scaled.values):
-                params = torch.tensor(
-                    np.float32(param_set), dtype=torch.float, requires_grad=True
-                )
-                optimizer = fn([params], lr=lr)
+                param_tensor = torch.tensor(np.float32(param_set), dtype=torch.float, requires_grad=False)
+                norm_params = ((param_tensor - min_values) / (max_values - min_values)).clone().detach()
+                norm_params.requires_grad_(True)
+                optimizer = fn([norm_params], lr=lr)
                 scheduler = StepLR(optimizer, step_size=100, gamma=0.1)
                 prev_loss = float("inf")
                 stop_epoch = n_epochs
                 for j in range(n_epochs):
                     loss = calculate_joint_loss(
-                        mlp, params, site_tokens, data_dict, min_values, max_values
+                        mlp, norm_params, site_tokens, data_dict, min_values, max_values, log_params
                     )
-                    new_loss = loss.item()
-                    loss_diff = abs(new_loss - prev_loss)
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
                     # Project parameters onto positive orthant
-                    project_to_positive(params, integer_params, min_values, max_values)
-
+                    with torch.no_grad():
+                        norm_params.data.clamp_(0.0, 1.0)
                     scheduler.step()
+                    new_loss = loss.item()
+                    loss_diff = abs(new_loss - prev_loss)
+                    prev_loss = loss.item()
                     if loss_diff <= 1e-4:
                         if stop_epoch == n_epochs:
                             stop_epoch = j
                     if j == stop_epoch + 100:
-                        print(f"Stopping at epoch: {j}")
+                        print(f"Stopping at epoch: {j}; final loss: {new_loss}")
                         break
                     prev_loss = new_loss
+                final_params = min_values + norm_params.detach() * (max_values - min_values)
+                final_params[integer_params] = torch.round(final_params[integer_params])
 
                 row = pd.concat(
                     [
                         pd.Series(param_set),
-                        pd.Series(params.detach()),
+                        pd.Series(final_params.detach()),
                         pd.Series({"loss": loss.item()}),
                         pd.Series({"lr": lr}),
                         pd.Series({"stop_epoch": int(stop_epoch + 100)}),
